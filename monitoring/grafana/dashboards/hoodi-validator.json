@@ -1,0 +1,164 @@
+{
+  "uid": "hoodi-validator",
+  "title": "Hoodi validator",
+  "tags": ["ethereum", "hoodi", "validator"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": {"from": "now-24h", "to": "now"},
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "panels": [
+    {"type": "row", "title": "Validator effectiveness (from Lighthouse validator monitor)", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}, "id": 1, "collapsed": false, "panels": []},
+
+    {"type": "stat", "title": "Attester hit rate, last 24h", "id": 2, "gridPos": {"h": 5, "w": 6, "x": 0, "y": 1},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "avg(avg_over_time(validator_monitor_prev_epoch_on_chain_attester_hit[24h]))"}],
+     "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 2, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.95}, {"color": "green", "value": 0.99}]}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"}},
+
+    {"type": "stat", "title": "Head vote correct, last 24h", "id": 3, "gridPos": {"h": 5, "w": 6, "x": 6, "y": 1},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "avg(avg_over_time(validator_monitor_prev_epoch_on_chain_head_attester_hit[24h]))"}],
+     "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 2, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.9}, {"color": "green", "value": 0.97}]}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"}},
+
+    {"type": "stat", "title": "Target vote correct, last 24h", "id": 4, "gridPos": {"h": 5, "w": 6, "x": 12, "y": 1},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "avg(avg_over_time(validator_monitor_prev_epoch_on_chain_target_attester_hit[24h]))"}],
+     "fieldConfig": {"defaults": {"unit": "percentunit", "decimals": 2, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 0.95}, {"color": "green", "value": 0.99}]}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"}},
+
+    {"type": "stat", "title": "Balance (ETH)", "id": 5, "gridPos": {"h": 5, "w": 6, "x": 18, "y": 1},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "sum(validator_monitor_balance_gwei) / 1e9"}],
+     "fieldConfig": {"defaults": {"unit": "none", "decimals": 5, "color": {"mode": "fixed", "fixedColor": "blue"}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "none", "graphMode": "area"}},
+
+    {"type": "timeseries", "title": "Attestation result per epoch (1 = hit, 0 = miss)", "id": 6, "gridPos": {"h": 7, "w": 12, "x": 0, "y": 6},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [
+       {"refId": "A", "expr": "validator_monitor_prev_epoch_on_chain_attester_hit", "legendFormat": "included {{validator}}"},
+       {"refId": "B", "expr": "validator_monitor_prev_epoch_on_chain_head_attester_hit", "legendFormat": "head correct {{validator}}"},
+       {"refId": "C", "expr": "validator_monitor_prev_epoch_on_chain_target_attester_hit", "legendFormat": "target correct {{validator}}"}
+     ],
+     "fieldConfig": {"defaults": {"min": 0, "max": 1, "custom": {"drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 10}}, "overrides": []},
+     "options": {"legend": {"displayMode": "list", "placement": "bottom"}}},
+
+    {"type": "timeseries", "title": "Inclusion distance (slots; 1 is best)", "id": 7, "gridPos": {"h": 7, "w": 6, "x": 12, "y": 6},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "validator_monitor_prev_epoch_on_chain_inclusion_distance", "legendFormat": "{{validator}}"}],
+     "fieldConfig": {"defaults": {"min": 0, "custom": {"drawStyle": "points", "pointSize": 5}}, "overrides": []},
+     "options": {"legend": {"displayMode": "hidden"}}},
+
+    {"type": "timeseries", "title": "Balance change per hour (gwei)", "id": 8, "gridPos": {"h": 7, "w": 6, "x": 18, "y": 6},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "sum(validator_monitor_balance_gwei) - sum(validator_monitor_balance_gwei offset 1h)", "legendFormat": "1h delta"}],
+     "fieldConfig": {"defaults": {"unit": "none", "custom": {"drawStyle": "bars", "fillOpacity": 60}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 0}]}, "color": {"mode": "thresholds"}}, "overrides": []},
+     "options": {"legend": {"displayMode": "hidden"}}},
+
+    {"type": "row", "title": "Consensus layer (Lighthouse)", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13}, "id": 10, "collapsed": false, "panels": []},
+
+    {"type": "stat", "title": "Beacon synced", "id": 11, "gridPos": {"h": 4, "w": 4, "x": 0, "y": 14},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "sync_eth2_synced"}],
+     "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "NO", "color": "red"}, "1": {"text": "YES", "color": "green"}}}], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"}},
+
+    {"type": "stat", "title": "Head slot", "id": 12, "gridPos": {"h": 4, "w": 4, "x": 4, "y": 14},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "beacon_head_state_slot"}],
+     "fieldConfig": {"defaults": {"unit": "none", "decimals": 0}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "none", "graphMode": "none"}},
+
+    {"type": "stat", "title": "Finalized epoch", "id": 13, "gridPos": {"h": 4, "w": 4, "x": 8, "y": 14},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "beacon_finalized_epoch"}],
+     "fieldConfig": {"defaults": {"unit": "none", "decimals": 0}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "none", "graphMode": "none"}},
+
+    {"type": "stat", "title": "CL peers", "id": 14, "gridPos": {"h": 4, "w": 4, "x": 12, "y": 14},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "libp2p_peers"}],
+     "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 20}, {"color": "green", "value": 40}]}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "area"}},
+
+    {"type": "stat", "title": "VC: beacon nodes synced", "id": 15, "gridPos": {"h": 4, "w": 4, "x": 16, "y": 14},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "vc_beacon_nodes_synced"}],
+     "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"}},
+
+    {"type": "stat", "title": "VC: validators enabled", "id": 16, "gridPos": {"h": 4, "w": 4, "x": 20, "y": 14},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "vc_validators_enabled_count"}],
+     "fieldConfig": {"defaults": {"unit": "none"}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "none", "graphMode": "none"}},
+
+    {"type": "timeseries", "title": "Block import time (p95, seconds)", "id": 17, "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum(rate(beacon_block_processing_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}],
+     "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+     "options": {"legend": {"displayMode": "hidden"}}},
+
+    {"type": "timeseries", "title": "Attestation delay from slot start (min, seconds)", "id": 18, "gridPos": {"h": 6, "w": 12, "x": 12, "y": 18},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "validator_monitor_prev_epoch_attestations_min_delay_seconds", "legendFormat": "{{validator}}"}],
+     "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 4}, {"color": "red", "value": 8}]}}, "overrides": []},
+     "options": {"legend": {"displayMode": "hidden"}}},
+
+    {"type": "row", "title": "Execution layer (Reth)", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24}, "id": 20, "collapsed": false, "panels": []},
+
+    {"type": "stat", "title": "EL head block", "id": 21, "gridPos": {"h": 4, "w": 6, "x": 0, "y": 25},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "reth_blockchain_tree_canonical_chain_height"}],
+     "fieldConfig": {"defaults": {"unit": "none", "decimals": 0}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "none", "graphMode": "none"}},
+
+    {"type": "stat", "title": "EL peers", "id": 22, "gridPos": {"h": 4, "w": 6, "x": 6, "y": 25},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "reth_network_connected_peers"}],
+     "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 5}, {"color": "green", "value": 15}]}}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "area"}},
+
+    {"type": "timeseries", "title": "Sync stage checkpoints (initial sync only)", "id": 23, "gridPos": {"h": 6, "w": 12, "x": 12, "y": 25},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "reth_sync_checkpoint", "legendFormat": "{{stage}}"}],
+     "fieldConfig": {"defaults": {"unit": "none"}, "overrides": []},
+     "options": {"legend": {"displayMode": "table", "placement": "right"}}},
+
+    {"type": "timeseries", "title": "Engine API: new payload latency (p95)", "id": 24, "gridPos": {"h": 6, "w": 12, "x": 0, "y": 29},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum(rate(reth_consensus_engine_beacon_new_payload_latency_bucket[5m])) by (le))", "legendFormat": "p95"}],
+     "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+     "options": {"legend": {"displayMode": "hidden"}}},
+
+    {"type": "row", "title": "Host", "gridPos": {"h": 1, "w": 24, "x": 0, "y": 35}, "id": 30, "collapsed": false, "panels": []},
+
+    {"type": "timeseries", "title": "Disk free on / (bytes) and 4-day projection", "id": 31, "gridPos": {"h": 6, "w": 8, "x": 0, "y": 36},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [
+       {"refId": "A", "expr": "node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}", "legendFormat": "free"},
+       {"refId": "B", "expr": "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}[6h], 4*24*3600)", "legendFormat": "in 4 days"}
+     ],
+     "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+     "options": {"legend": {"displayMode": "list", "placement": "bottom"}}},
+
+    {"type": "timeseries", "title": "CPU busy (%)", "id": 32, "gridPos": {"h": 6, "w": 8, "x": 8, "y": 36},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [{"refId": "A", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))", "legendFormat": "busy"}],
+     "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+     "options": {"legend": {"displayMode": "hidden"}}},
+
+    {"type": "timeseries", "title": "Memory used (%) and clock offset (ms)", "id": 33, "gridPos": {"h": 6, "w": 8, "x": 16, "y": 36},
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "targets": [
+       {"refId": "A", "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)", "legendFormat": "memory %"},
+       {"refId": "B", "expr": "node_timex_offset_seconds * 1000", "legendFormat": "clock offset ms"}
+     ],
+     "fieldConfig": {"defaults": {"unit": "none"}, "overrides": [{"matcher": {"id": "byName", "options": "clock offset ms"}, "properties": [{"id": "custom.axisPlacement", "value": "right"}]}]},
+     "options": {"legend": {"displayMode": "list", "placement": "bottom"}}}
+  ]
+}
