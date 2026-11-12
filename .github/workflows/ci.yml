@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # weekly, so a broken upstream image tag or rule syntax is caught even with no commits
+    - cron: "17 6 * * 1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install linters
+        run: |
+          pip install --quiet yamllint shellcheck-py
+          PROM=3.5.0; AM=0.28.1; GH=https://github.com/prometheus
+          curl -sSL "$GH/prometheus/releases/download/v${PROM}/prometheus-${PROM}.linux-amd64.tar.gz" \
+            | tar xz --strip-components=1 "prometheus-${PROM}.linux-amd64/promtool"
+          curl -sSL "$GH/alertmanager/releases/download/v${AM}/alertmanager-${AM}.linux-amd64.tar.gz" \
+            | tar xz --strip-components=1 "alertmanager-${AM}.linux-amd64/amtool"
+          sudo mv promtool amtool /usr/local/bin/
+
+      - name: Lint
+        run: ./scripts/check.sh
+
+      - name: Pinned images still exist
+        run: |
+          set -a; . ./.env.example; set +a
+          for img in "$RETH_IMAGE" "$LIGHTHOUSE_IMAGE" "$PROMETHEUS_IMAGE" "$GRAFANA_IMAGE" "$ALERTMANAGER_IMAGE" "$NODE_EXPORTER_IMAGE"; do
+            echo "checking $img"; docker manifest inspect "$img" >/dev/null
+          done
