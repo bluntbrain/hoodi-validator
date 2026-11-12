@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily slashing-protection export at 04:10 UTC
+
+[Timer]
+OnCalendar=*-*-* 04:10:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
