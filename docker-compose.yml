@@ -1,0 +1,173 @@
+# Ethereum Hoodi testnet: Reth (execution) + Lighthouse (beacon + validator) + monitoring.
+# All state lives under ./data. Metrics stay on the internal network; only p2p ports and
+# localhost-bound Grafana are published on the host.
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+services:
+  reth:
+    image: ${RETH_IMAGE}
+    container_name: hoodi-reth
+    <<: *logging
+    restart: unless-stopped
+    stop_grace_period: 2m
+    user: "10001:10001"
+    command:
+      - node
+      - --chain=${NETWORK}
+      - --datadir=/data
+      - --full
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3,txpool,debug
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8551
+      - --authrpc.jwtsecret=/jwt/jwt.hex
+      - --port=${RETH_P2P_PORT}
+      - --discovery.port=${RETH_P2P_PORT}
+      - --metrics=0.0.0.0:9001
+    volumes:
+      - ./data/reth:/data
+      - ./jwt.hex:/jwt/jwt.hex:ro
+    ports:
+      - "${RETH_P2P_PORT}:${RETH_P2P_PORT}/tcp"
+      - "${RETH_P2P_PORT}:${RETH_P2P_PORT}/udp"
+    networks: [chain]
+
+  beacon:
+    image: ${LIGHTHOUSE_IMAGE}
+    container_name: hoodi-beacon
+    <<: *logging
+    restart: unless-stopped
+    stop_grace_period: 1m
+    user: "10002:10002"
+    depends_on: [reth]
+    command:
+      - lighthouse
+      - beacon_node
+      - --network=${NETWORK}
+      - --datadir=/data
+      - --execution-endpoint=http://reth:8551
+      - --execution-jwt=/jwt/jwt.hex
+      - --checkpoint-sync-url=${CHECKPOINT_SYNC_URL}
+      - --port=${LIGHTHOUSE_P2P_PORT}
+      - --quic-port=${LIGHTHOUSE_QUIC_PORT}
+      - --http
+      - --http-address=0.0.0.0
+      - --http-port=5052
+      - --metrics
+      - --metrics-address=0.0.0.0
+      - --metrics-port=5054
+      # Export per-validator attestation metrics for every key the validator client attaches.
+      - --validator-monitor-auto
+      - --disable-upnp
+    volumes:
+      - ./data/lighthouse-beacon:/data
+      - ./jwt.hex:/jwt/jwt.hex:ro
+    ports:
+      - "${LIGHTHOUSE_P2P_PORT}:${LIGHTHOUSE_P2P_PORT}/tcp"
+      - "${LIGHTHOUSE_P2P_PORT}:${LIGHTHOUSE_P2P_PORT}/udp"
+      - "${LIGHTHOUSE_QUIC_PORT}:${LIGHTHOUSE_QUIC_PORT}/udp"
+    networks: [chain]
+
+  validator:
+    image: ${LIGHTHOUSE_IMAGE}
+    container_name: hoodi-validator
+    <<: *logging
+    restart: unless-stopped
+    stop_grace_period: 1m
+    user: "10003:10003"
+    depends_on: [beacon]
+    command:
+      - lighthouse
+      - validator_client
+      - --network=${NETWORK}
+      - --datadir=/data
+      - --beacon-nodes=http://beacon:5052
+      - --suggested-fee-recipient=${FEE_RECIPIENT}
+      - --graffiti=${GRAFFITI}
+      - --metrics
+      - --metrics-address=0.0.0.0
+      - --metrics-port=5064
+      - --init-slashing-protection
+      # Skips 2 to 3 epochs of duties after every start to detect a second copy of these keys
+      # running elsewhere. Costs a few attestations per restart; prevents slashing. Keep it.
+      - --enable-doppelganger-protection
+    volumes:
+      - ./data/lighthouse-validator:/data
+    networks: [chain]
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: hoodi-prometheus
+    <<: *logging
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=90d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - ./data/prometheus:/prometheus
+    networks: [chain]
+
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE}
+    container_name: hoodi-alertmanager
+    <<: *logging
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+      - ./data/alertmanager:/alertmanager
+    networks: [chain]
+
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    container_name: hoodi-grafana
+    <<: *logging
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hoodi-validator.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./data/grafana:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [chain]
+
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE}
+    container_name: hoodi-node-exporter
+    <<: *logging
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /:/host:ro,rslave
+    networks: [chain]
+
+networks:
+  chain:
+    name: hoodi
