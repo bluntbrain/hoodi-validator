@@ -1,0 +1,123 @@
+# Alert rules for the Hoodi stack.
+# Metric names are from Reth v2.8 and Lighthouse v8.3. If a rule never fires and never shows
+# data in Grafana, check the name against `curl -s http://127.0.0.1:5054/metrics` from inside
+# the beacon container (`docker compose exec beacon wget -qO- http://127.0.0.1:5054/metrics`).
+#
+# Lighthouse's validator-monitor metrics are per-validator gauges that hold 0 or 1 for the
+# previous epoch (6.4 minutes). avg_over_time over an hour therefore reads as "share of the last
+# ~9 epochs", which is the effectiveness number the dashboard shows.
+
+groups:
+  - name: targets
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.job }} is not being scraped"
+          description: "Prometheus cannot reach {{ $labels.instance }} for 3 minutes. Container down or crash-looping."
+
+  - name: execution
+    rules:
+      - alert: RethLowPeers
+        expr: reth_network_connected_peers < 5
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Reth has {{ $value }} peers"
+          description: "Fewer than 5 peers for 10 minutes. Check that port 30303 tcp/udp is open on the host firewall and router."
+
+      - alert: RethNotAdvancing
+        expr: increase(reth_blockchain_tree_canonical_chain_height[10m]) == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Reth canonical head has not moved in 10 minutes"
+          description: "Either the beacon node stopped sending forkchoice updates or Reth is stuck. Check `make logs`."
+
+  - name: consensus
+    rules:
+      - alert: BeaconNotSynced
+        expr: sync_eth2_synced == 0
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: "Lighthouse beacon node reports not synced"
+          description: "Out of sync for 10 minutes. Validator duties are being missed."
+
+      - alert: BeaconLowPeers
+        expr: libp2p_peers < 20
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Lighthouse has {{ $value }} peers"
+          description: "Fewer than 20 peers. Check ports 9000 tcp/udp and 9001 udp."
+
+      - alert: BeaconHeadStale
+        expr: increase(beacon_head_state_slot[5m]) == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Beacon head slot has not advanced in 5 minutes"
+          description: "The beacon node is not importing blocks. Check execution engine connectivity (JWT, port 8551)."
+
+  - name: validator
+    rules:
+      - alert: ValidatorClientNoBeacon
+        expr: vc_beacon_nodes_synced == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Validator client has no synced beacon node"
+          description: "The VC cannot get duties. Every slot missed here is a missed attestation."
+
+      - alert: ValidatorAttestationsMissing
+        expr: avg_over_time(validator_monitor_prev_epoch_on_chain_attester_miss[1h]) > 0.3
+        for: 0m
+        labels: {severity: warning}
+        annotations:
+          summary: "Validator {{ $labels.validator }} missed over 30% of attestations in the last hour"
+          description: "One miss in nine epochs is network noise. Three or more means a real problem: sync, peers, clock, or the VC is down."
+
+      - alert: ValidatorBalanceDropping
+        expr: (validator_monitor_balance_gwei - validator_monitor_balance_gwei offset 1h) < 0
+        for: 2h
+        labels: {severity: warning}
+        annotations:
+          summary: "Validator {{ $labels.validator }} balance has fallen for 2 hours"
+          description: "Sustained negative rewards. The chain sees this validator as offline even if the containers look healthy."
+
+  - name: host
+    rules:
+      - alert: DiskWillFillIn4Days
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}[6h], 4 * 24 * 3600) < 0
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "Root filesystem predicted to fill within 4 days"
+          description: "Reth full-node growth on Hoodi is modest, but logs or prometheus retention can surprise you. See docs/runbook.md, Disk."
+
+      - alert: DiskLow
+        expr: node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} < 0.10
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: "Less than 10% disk left on /"
+          description: "Reth stops with a corrupt-looking database if the disk fills. Free space now."
+
+      - alert: ClockDrift
+        expr: abs(node_timex_offset_seconds) > 0.5
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "System clock is off by {{ $value }}s"
+          description: "Attestations are timed to the slot. More than 0.5s of drift costs rewards. Check chrony or systemd-timesyncd."
+
+      - alert: HighMemory
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.92
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Host memory above 92%"
+          description: "Reth or Lighthouse may be OOM-killed next. Check `docker stats`."
