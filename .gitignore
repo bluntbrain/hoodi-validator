@@ -1,0 +1,13 @@
+# Runtime state. Never commit.
+data/*
+!data/.gitkeep
+backups/*
+!backups/.gitkeep
+keys-import/*
+!keys-import/.gitkeep
+jwt.hex
+.env
+*.log
+
+# rendered by scripts/init.sh from the .tmpl, holds the telegram token
+monitoring/alertmanager/alertmanager.yml
